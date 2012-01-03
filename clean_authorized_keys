@@ -1,0 +1,71 @@
+#!/bin/bash
+
+if [ ! `whoami` = "root" ]
+then
+    echo "Please run as root."
+    exit 4
+fi
+
+
+if [ -z $1 ]
+then
+    echo "Usage: check_authorized_keys <PATTERN>"
+    exit 3
+fi
+
+if
+    mlocate_path=`locate -S`
+then
+    # locate -S command will output database path in following format:
+    # Database /full/path/to/db: (more output)...
+    mlocate_path=${mlocate_path%:*} #remove content after colon
+    mlocate_path=${mlocate_path#'Database '*} #remove 'Database '
+else
+    echo "Couldn't run locate command.  Is mlocate installed?"
+    exit 5
+fi
+
+if [ -r $mlocate_path ]
+then
+    echo -n "mlocate database last updated: "
+    stat -c %y $mlocate_path
+    echo -n "Do you want to update the locate database this script depends on? [y/n]: "
+    read update_locate
+    if [ "$update_locate" = "y" ]
+    then
+        echo "Updating locate database.  This may take a few minutes..."
+        updatedb
+        echo "Update complete."
+        echo ""
+    fi
+else
+    echo "Cannot read from $mlocate_path"
+    exit 2
+fi
+
+for key_file in `locate authorized_keys`; do
+    echo "Searching $key_file..."
+    IFS=$'\n'
+    for matching_entry in `grep "$1" $key_file`; do
+    IFS=' '
+        echo "Found an entry in $key_file:"
+        echo $matching_entry
+        echo -n "Remove entry? [y/n]: "
+        read remove_entry
+        if [ "$remove_entry" = "y" ]
+        then
+ if [ ! -w $key_file ]
+            then
+                echo "Cannot write to $key_file."
+                exit 1
+            else
+                sed -i "/$matching_entry/d" $key_file
+                echo "Deleted."
+            fi
+        else
+            echo "Not deleted."
+        fi
+    done
+done
+
+echo "Search complete."
